@@ -1,0 +1,13 @@
+---
+
+- hosts: postgresql
+  remote_user: vagrant
+  become: yes
+  roles:
+    - artifactory_ha_database
+
+- hosts: artifactory
+  remote_user: vagrant
+  become: yes
+  roles:
+    - artifactory_ha

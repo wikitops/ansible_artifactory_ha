@@ -1,0 +1,49 @@
+---
+
+###
+# JFROG ARTIFACTORY HA
+###
+
+# Version
+artifactory_ha_version: latest
+
+# Licence
+artifactory_ha_licence_type: pro
+artifactory_ha_licence_local_path: artifactory_extra_conf/{{ inventory_hostname }}.lic
+artifactory_ha_licence_dest_path: "{{ artifactory_ha_extra_conf_dir }}/artifactory.lic"
+
+# Directory
+artifactory_ha_home_dir: /var/opt/jfrog
+artifactory_ha_data_dir: "{{ artifactory_ha_home_dir }}/artifactory"
+artifactory_ha_extra_conf_dir: "{{ artifactory_ha_home_dir }}/artifactory_extra_conf"
+
+###
+# DOCKER
+###
+
+# Network
+artifactory_ha_docker_network:
+  name: artifactory
+  state: present
+
+# Stack
+artifactory_ha_docker:
+  name: artifactory
+  image: docker.bintray.io/jfrog/artifactory-{{ artifactory_ha_licence_type }}:{{ artifactory_ha_version }}
+  state: started
+  network: artifactory
+  ports:
+    - 8081:8081/tcp
+    - 10002:10002/tcp
+  volumes:
+    - "{{ artifactory_ha_home_dir }}:/var/opt/jfrog/artifactory"
+    - "{{ artifactory_ha_extra_conf_dir }}:/artifactory_extra_conf"
+  ulimits:
+    nproc: 65535
+    nofile:
+      soft: 32000
+      hard: 40000
+
+# Java
+artifactory_ha_java_xms: 512m
+artifactory_ha_java_xmx: 4g

@@ -1,0 +1,82 @@
+---
+
+- name: ARTIFACTORY HA DOCKER | Create data directory
+  file:
+    path: "{{ item }}"
+    owner: 1030 # ARTIFACTORY HA DOCKER user in container
+    group: 1030
+    mode: 0755
+    state: directory
+  loop:
+    - "{{ artifactory_ha_data_dir }}"
+    - "{{ artifactory_ha_extra_conf_dir }}"
+
+- name: ARTIFACTORY HA DOCKER | Copy licence files
+  copy:
+    src: "{{ artifactory_ha_licence_local_path }}"
+    dest: "{{ artifactory_ha_licence_dest_path }}"
+    owner: 1030 # ARTIFACTORY HA DOCKER user in container
+    group: 1030
+    mode: 0644
+
+- name: ARTIFACTORY HA DOCKER | Deploy configuration file
+  template:
+    src: artifactory_extra_conf/binarystore.xml.j2
+    dest: "{{ artifactory_ha_extra_conf_dir }}/binarystore.xml"
+    owner: 1030 # ARTIFACTORY HA DOCKER user in container
+    group: 1030
+    mode: 0644
+
+- name: ARTIFACTORY HA DOCKER | Create the network
+  docker_network:
+    name: "{{ artifactory_ha_docker_network.name }}"
+    state: "{{ artifactory_ha_docker_network.state }}"
+
+- name: ARTIFACTORY HA DOCKER | Deploy the primary container
+  docker_container:
+    name: "{{ artifactory_ha_docker.name }}"
+    image: "{{ artifactory_ha_docker.image }}"
+    state: "{{ artifactory_ha_docker.state }}"
+    restart: yes
+    ports: "{{ artifactory_ha_docker.ports }}"
+    env:
+      DB_TYPE: "{{ artifactory_ha_database_type }}"
+      DB_HOST: "{{ artifactory_ha_database_host }}"
+      DB_PORT: "{{ artifactory_ha_database_port }}"
+      DB_USER: "{{ artifactory_ha_database_user }}"
+      DB_PASSWORD: "{{ artifactory_ha_database_password }}"
+      EXTRA_JAVA_OPTIONS: "-Xms{{ artifactory_ha_java_xms }} -Xmx{{ artifactory_ha_java_xmx }} -Xss256k -XX:+UseG1GC"
+      HA_IS_PRIMARY: "true"
+      HA_HOST_IP: "{{ hostvars[inventory_hostname].ip }}"
+    networks:
+      - name: "{{ artifactory_ha_docker.network }}"
+    volumes: "{{ artifactory_ha_docker.volumes }}"
+    ulimits:
+      - "nproc:{{ artifactory_ha_docker.ulimits.nproc }}"
+      - "nofile:{{ artifactory_ha_docker.ulimits.nofile.soft }}:{{ artifactory_ha_docker.ulimits.nofile.hard }}"
+  when: inventory_hostname in groups['artifactory_master']
+
+- name: ARTIFACTORY HA DOCKER | Deploy the secondary containers
+  docker_container:
+    name: "{{ artifactory_ha_docker.name }}"
+    image: "{{ artifactory_ha_docker.image }}"
+    state: "{{ artifactory_ha_docker.state }}"
+    restart: yes
+    ports: "{{ artifactory_ha_docker.ports }}"
+    env:
+      DB_TYPE: "{{ artifactory_ha_database_type }}"
+      DB_HOST: "{{ artifactory_ha_database_host }}"
+      DB_PORT: "{{ artifactory_ha_database_port }}"
+      DB_USER: "{{ artifactory_ha_database_user }}"
+      DB_PASSWORD: "{{ artifactory_ha_database_password }}"
+      ART_PRIMARY_BASE_URL: "http://{{ hostvars[groups['artifactory_master'][0]].ip }}:8081/artifactory"
+      EXTRA_JAVA_OPTIONS: "-Xms{{ artifactory_ha_java_xms }} -Xmx{{ artifactory_ha_java_xmx }} -Xss256k -XX:+UseG1GC"
+      HA_IS_PRIMARY: "false"
+      HA_HOST_IP: "{{ hostvars[inventory_hostname].ip }}"
+    networks:
+      - name: "{{ artifactory_ha_docker.network }}"
+    volumes: "{{ artifactory_ha_docker.volumes }}"
+    ulimits:
+      - "nproc:{{ artifactory_ha_docker.ulimits.nproc }}"
+      - "nofile:{{ artifactory_ha_docker.ulimits.nofile.soft }}:{{ artifactory_ha_docker.ulimits.nofile.hard }}"
+  when: inventory_hostname not in groups['artifactory_master']

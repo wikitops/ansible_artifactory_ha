@@ -1,0 +1,36 @@
+---
+
+- name: ARTIFACTORY HA POSTGRESQL | Create database
+  postgresql_db:
+    name: "{{ artifactory_ha_database_name }}"
+    port: "{{ artifactory_ha_database_port }}"
+    state: present
+  become: yes
+  become_user: postgres
+
+- name: ARTIFACTORY HA POSTGRESQL | Create role
+  postgresql_user:
+    db: "{{ artifactory_ha_database_name }}"
+    name: "{{ artifactory_ha_database_user }}"
+    password: "md5{{ (artifactory_ha_database_password + artifactory_ha_database_user)|hash('md5') }}"
+    port: "{{ artifactory_ha_database_port }}"
+    priv: ALL
+    state: present
+    encrypted: yes
+  become: yes
+  become_user: postgres
+
+- name: ARTIFACTORY HA POSTGRESQL | allow local instances
+  lineinfile:
+    path: "/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf"
+    line: "host    all           all             {{ hostvars[item].ip }}/32           md5"
+    state: present
+  loop: "{{ groups['artifactory'] }}"
+  notify: restart postgresql
+
+- name: ARTIFACTORY HA POSTGRESQL | Allow Docker network
+  lineinfile:
+    path: "/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf"
+    line: "host    {{ artifactory_ha_database_name }}           {{ artifactory_ha_database_user }}             172.18.0.0/16           md5"
+    state: present
+  notify: restart postgresql
